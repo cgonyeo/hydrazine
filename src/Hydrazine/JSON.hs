@@ -85,26 +85,24 @@ instance ToJSON BootFlag where
                                         , "value"    .= val
                                         ]
 
-data NewImage = NewImage { newImgName   :: T.Text
-                         , newImgKernel :: Downloadable
-                         , newImgCPIOs  :: [Downloadable]
-                         } deriving(Eq,Show)
+data UploadID = UploadID { uploadID :: Int } deriving(Eq,Show)
+
+instance ToJSON UploadID where
+    toJSON (UploadID i) = object [ "id" .= i ]
+
+data UploadResults = UploadResults { succeeded :: Bool
+                                   , errmsg :: T.Text
+                                   }
+
+instance ToJSON UploadResults where
+    toJSON (UploadResults s m) = object [ "succeeded" .= s
+                                        , "error_msg" .= m
+                                        ]
+
+data NewImage = NewImage { newImgName :: T.Text } deriving(Eq,Show)
 
 instance FromJSON NewImage where
-    parseJSON (Object v) = NewImage
-                               <$> v .: "name"
-                               <*> v .: "kernel"
-                               <*> v .: "cpios"
-    parseJSON _          = empty
-
-data Downloadable = Downloadable { url       :: T.Text
-                                 , signature :: Maybe T.Text
-                                 } deriving(Eq,Show)
-
-instance FromJSON Downloadable where
-    parseJSON (Object v) = Downloadable
-                               <$> v .: "url"
-                               <*> v .: "signature"
+    parseJSON (Object v) = NewImage <$> v .: "name"
     parseJSON _          = empty
 
 data NewBox = NewBox { newBoxName :: T.Text

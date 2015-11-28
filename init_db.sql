@@ -8,7 +8,6 @@ DROP TABLE IF EXISTS "images" CASCADE;
 
 CREATE TABLE "images" (
     id           SERIAL       NOT NULL,
-    active       BOOLEAN      NOT NULL,
     name         VARCHAR(256) UNIQUE NOT NULL,
     kernel_path  TEXT         UNIQUE NOT NULL,
     created      TIMESTAMP    NOT NULL,
