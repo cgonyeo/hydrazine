@@ -9,6 +9,7 @@ import Control.Monad.Trans.Either
 import Data.Functor.Identity
 import Data.Time.LocalTime
 import Control.Monad
+import Data.Maybe
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 
@@ -101,27 +102,80 @@ newBox conn n (NewBox m) = do
         )
 
 updateBox :: DBConn -> T.Text -> UpdateBox -> EitherT ServantErr IO ()
-updateBox = undefined
---updateBox conn n (UpdateBox mImgName, mUntil, mFlags) = do
---    dbres <- liftIO $ do
---        H.session conn $ H.tx Nothing $ do
---            when (mImg /= Nothing) do
---                (mImgId :: Maybe (Identity Int)) <- H.maybeEx $ [H.stmt|
---                        SELECT id
---                        FROM "images"
---                        WHERE name = ?
---                    |]
---                
---                H.unitEx $ [H.stmt|
---                        UPDATE "boxen"
---                        SET 
---                            (name,mac)
---                        VALUES
---                            (?,?)
---                    |] n (stripMac m)
---    case dbres of
---        Left err -> left err500 { errBody = BS.pack $ show err }
---        Right _ -> right ()
+updateBox conn name (UpdateBox img til fs) =
+    runTx_ conn (do
+            (boxId :: Maybe (Identity Int))
+                <- lift $ H.maybeEx $ [H.stmt|
+                        SELECT id
+                        FROM "boxen"
+                        WHERE name = ?
+                    |] name
+            when (isNothing boxId) $
+                throwE err400 { errBody = "a box with that name doesn't exist" }
+
+            when (isJust img) $ do
+                (imgId :: Maybe (Identity Int))
+                    <- lift $ H.maybeEx $ [H.stmt|
+                            SELECT id
+                            FROM "images"
+                            WHERE name = ?
+                        |] img
+                when (isNothing imgId) $
+                    throwE err400 { errBody = "an image with that name doesn't exist" }
+                lift $ H.unitEx $ [H.stmt|
+                        UPDATE "boxen"
+                        SET boot_image = ?
+                        WHERE name = ?
+                    |] (unwrapId $ fromJust imgId) name
+
+            when (isJust til) $ 
+                lift $ H.unitEx $ [H.stmt|
+                        UPDATE "boxen"
+                        SET boot_until = ?
+                        WHERE name = ?
+                    |] (fromJust til) name
+
+            when (isJust fs) $ do
+                lift $ H.unitEx $ [H.stmt|
+                        DELETE FROM "bootflags"
+                        WHERE box_id = ?
+                    |] (unwrapId $ fromJust boxId)
+                forM_ (fromJust fs) (\(BootFlag key val) -> 
+                        lift $ H.unitEx $ [H.stmt|
+                                INSERT INTO "bootflags"
+                                    (box_id,key,value)
+                                VALUES
+                                    (?,?,?)
+                            |] (unwrapId $ fromJust boxId) key val
+                    )
+        )
 
 deleteBox :: DBConn -> T.Text -> EitherT ServantErr IO ()
-deleteBox  = undefined
+deleteBox conn name = 
+    runTx_ conn (do
+            (mBoxId :: Maybe (Identity Int))
+                <- lift $ H.maybeEx $ [H.stmt|
+                        SELECT id
+                        FROM "boxen"
+                        WHERE name = ?
+                    |] name
+            when (isNothing mBoxId) $
+                throwE err400 { errBody = "a box with that name doesn't exist" }
+
+            let boxId = unwrapId $ fromJust mBoxId
+
+            lift $ H.unitEx $ [H.stmt|
+                    DELETE FROM "boots"
+                    WHERE box_id = ?
+                |] boxId
+
+            lift $ H.unitEx $ [H.stmt|
+                    DELETE FROM "bootflags"
+                    WHERE box_id = ?
+                |] boxId
+
+            lift $ H.unitEx $ [H.stmt|
+                    DELETE FROM "boxen"
+                    WHERE box_id = ?
+                |] boxId
+        )

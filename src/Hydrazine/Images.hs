@@ -17,7 +17,6 @@ import System.Directory
 import System.FilePath
 import Data.UUID
 import Data.UUID.V4
-import Data.Aeson
 import Control.Monad.Trans.Class
 import Control.Monad.Trans.Except
 
@@ -176,69 +175,100 @@ uploadCPIO mups i files = do
         _ -> do liftIO $ forM_ newfiles (\(Just (new,old)) -> renameFile old new)
                 right ()
 
-imageAlreadyExists :: DBConn -> T.Text -> EitherT ServantErr IO (Maybe ServantErr)
+imageAlreadyExists :: DBConn -> T.Text -> EitherT ServantErr IO ()
 imageAlreadyExists conn n =
-    runTx conn ( do
+    runTx_ conn ( do
             (res :: Maybe (Identity Int))
                 <- lift $ H.maybeEx $ [H.stmt|
                     SELECT id
                     FROM images
                     WHERE name = ?
                 |] n
-            return res
-        )
-        (\res ->
             case res of
-                Nothing -> right $ Nothing
-                Just _ -> right $ Just err400 { errBody = "image with that name already exists" }
+                Nothing -> return ()
+                Just _ -> throwE err400 { errBody = "image with that name already exists" }
         )
 
-completeUpload :: Config -> DBConn -> MVar Uploads -> Int -> EitherT ServantErr IO UploadResults
+completeUpload :: Config -> DBConn -> MVar Uploads -> Int -> EitherT ServantErr IO ()
 completeUpload (Config fd) conn mups i = do
-    res <- liftIO $ modifyMVar mups (\(Uploads c as) -> do
-                    case findUpload i as of
-                        Just u -> return (Uploads c (filter (/= u) as),(Right u))
-                        Nothing -> return (Uploads c as,(Left ErrNotInProgress))
-                )
-    case res of
-        Left err -> left $ getError err
-        Right (ActiveUpload _ _ Nothing _) -> right $ UploadResults False "kernel was not uploaded"
-        Right (ActiveUpload _ _ _ []) -> right $ UploadResults False "cpio was not uploaded"
-        Right (ActiveUpload _ n mkFile cs) -> do
-            merr <- imageAlreadyExists conn n
-            case merr of
-                Just err -> left err
-                Nothing -> do
-                    (finalKFile,finalCFiles) <- liftIO $ do
-                        uuid <- toString <$> nextRandom
-                        let finalKFile = fd </> (uuid ++ ".vmlinuz")
-                        renameFile (fromJust mkFile) finalKFile
-                        finalCFiles <- forM (zip cs ([0..] :: [Int])) (\(cFile,num) -> do
-                            let finalCFile = fd </> (uuid ++ "." ++ show num ++ "." ++ ".cpio")
-                            renameFile cFile finalCFile
-                            return finalCFile
-                            )
-                        return (finalKFile,finalCFiles)
-                    dbres <- liftIO $ do
-                        H.session conn $ H.tx Nothing $ do
-                            (Identity imgId :: Identity Int) <- H.singleEx $ [H.stmt|
-                                    INSERT INTO "images"
-                                        (name,kernel_path,created)
-                                    VALUES
-                                        (?,?,now())
-                                    RETURNING id
-                                |] n finalKFile
-                            forM_ (zip finalCFiles ([0..] :: [Int])) (\(c,num) -> do
-                                    H.unitEx $ [H.stmt|
-                                            INSERT INTO "cpios"
-                                                (image_id,ordering,cpio_path)
-                                            VALUES
-                                                (?,?,?)
-                                        |] imgId num c
-                               )
-                    case dbres of
-                        Left err -> left $ err500 { errBody = encode $ UploadResults False (T.pack $ show err) }
-                        Right () -> right $ UploadResults True ""
+    res <- lift $ runExceptT $ do
+        upload <- liftIO $ modifyMVar mups (\(Uploads c as) ->
+                        case findUpload i as of
+                            Just u -> return (Uploads c (filter (/= u) as),(Just u))
+                            Nothing -> return (Uploads c as,(Nothing))
+                    )
+        when (isNothing upload) $
+            throwE $ getError ErrNotInProgress
 
-deleteImage :: DBConn -> name -> EitherT ServantErr IO ()
-deleteImage = undefined
+        let (Just (ActiveUpload _ n mKFile cs)) = upload
+
+        eitherErr <- lift $ runEitherT $ imageAlreadyExists conn n
+        case eitherErr of
+            Left err -> throwE err
+            Right _ -> return ()
+
+        (finalKFile,finalCFiles) <- liftIO $ do
+            uuid <- toString <$> nextRandom
+            let finalKFile = fd </> (uuid ++ ".vmlinuz")
+            renameFile (fromJust mKFile) finalKFile
+            finalCFiles <- forM (zip cs ([0..] :: [Int])) (\(cFile,num) -> do
+                let finalCFile = fd </> (uuid ++ "." ++ show num ++ "." ++ ".cpio")
+                renameFile cFile finalCFile
+                return finalCFile
+                )
+            return (finalKFile,finalCFiles)
+
+        eitherErr' <- lift $ runEitherT $ runTx_ conn ( do
+                (Identity imgId :: Identity Int)
+                    <- lift $ H.singleEx $ [H.stmt|
+                        INSERT INTO "images"
+                            (name,kernel_path,created)
+                        VALUES
+                            (?,?,now())
+                        RETURNING id
+                    |] n finalKFile
+                forM_ (zip finalCFiles ([0..] :: [Int])) (\(c,num) -> do
+                        lift $ H.unitEx $ [H.stmt|
+                                INSERT INTO "cpios"
+                                    (image_id,ordering,cpio_path)
+                                VALUES
+                                    (?,?,?)
+                            |] imgId num c
+                   )
+            )
+        case eitherErr' of
+            Left err -> throwE err
+            Right _ -> return ()
+    case res of
+        Left err -> left err
+        Right _ -> right ()
+
+deleteImage :: DBConn -> T.Text -> EitherT ServantErr IO ()
+deleteImage conn n = 
+    runTx_ conn (do
+            (mImgId :: Maybe (Identity Int))
+                <- lift $ H.maybeEx $ [H.stmt|
+                        SELECT id
+                        FROM "images"
+                        WHERE name = ?
+                    |] n
+            when (isNothing mImgId) $
+                throwE err400 { errBody = "an image with that name doesn't exist" }
+
+            let imgId = unwrapId $ fromJust mImgId
+
+            lift $ H.unitEx $ [H.stmt|
+                    DELETE FROM "defaultbootflags"
+                    WHERE image_id = ?
+                |] imgId
+
+            lift $ H.unitEx $ [H.stmt|
+                    DELETE FROM "cpios"
+                    WHERE image_id = ?
+                |] imgId
+
+            lift $ H.unitEx $ [H.stmt|
+                    DELETE FROM "images"
+                    WHERE image_id = ?
+                |] imgId
+        )

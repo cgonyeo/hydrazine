@@ -97,15 +97,6 @@ data UploadID = UploadID { uploadID :: Int } deriving(Eq,Show)
 instance ToJSON UploadID where
     toJSON (UploadID i) = object [ "id" .= i ]
 
-data UploadResults = UploadResults { succeeded :: Bool
-                                   , errmsg :: T.Text
-                                   }
-
-instance ToJSON UploadResults where
-    toJSON (UploadResults s m) = object [ "succeeded" .= s
-                                        , "error_msg" .= m
-                                        ]
-
 data NewImage = NewImage { newImgName :: T.Text } deriving(Eq,Show)
 
 instance FromJSON NewImage where
