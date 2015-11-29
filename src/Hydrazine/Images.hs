@@ -18,10 +18,11 @@ import System.FilePath
 import Data.UUID
 import Data.UUID.V4
 import Data.Aeson
+import Control.Monad.Trans.Class
+import Control.Monad.Trans.Except
 
 import qualified Hasql as H
 import qualified Data.Text as T
-import qualified Data.ByteString.Lazy.Char8 as BS
 
 import Hydrazine.Config
 import Hydrazine.JSON
@@ -71,9 +72,9 @@ findUpload _ [] = Nothing
 
 getImages :: DBConn -> EitherT ServantErr IO [ImageInfo]
 getImages conn = do
-    dbres <- liftIO $ do
-        H.session conn $ H.tx Nothing $ do
-            (imgs :: [(Int,T.Text,LocalTime,T.Text)]) <- H.listEx $ [H.stmt|
+    runTx conn ( do
+            (imgs :: [(Int,T.Text,LocalTime,T.Text)])
+                <- lift $ H.listEx $ [H.stmt|
                     SELECT id
                          , name
                          , created
@@ -81,38 +82,50 @@ getImages conn = do
                     FROM images
                     ORDER BY name ASC
                 |]
-            cs <- forM imgs (\(imgId,_,_,_) -> do
-                    (cs :: [(Identity T.Text)]) <- H.listEx $ [H.stmt|
+            (cs :: [[T.Text]])
+                <- forM imgs (\(imgId,_,_,_) -> do
+                       cs <- lift $ H.listEx $ [H.stmt|
                             SELECT cpio_path
                             FROM cpios
                             WHERE image_id = ?
                             ORDER BY ordering ASC
                         |] imgId
-                    let cs' = map (\(Identity x) -> x) cs
-                    return cs'
+                       return $ map unwrapId cs
                 )
-            fs <- forM imgs (\(imgId,_,_,_) -> do
-                    (fs :: [(T.Text,Maybe T.Text)]) <- H.listEx $ [H.stmt|
+            (fs :: [[(T.Text,Maybe T.Text)]])
+                <- forM imgs (\(imgId,_,_,_) ->
+                    lift $ H.listEx $ [H.stmt|
                             SELECT key
                                  , value
                             FROM defaultbootflags
                             WHERE image_id = ?
                             ORDER BY key ASC
                         |] imgId
-                    return fs
                 )
             return $ zip3 imgs cs fs
-    case dbres of
-        Left err -> left $ err500 { errBody = BS.pack $ show err }
-        Right lst -> right $ map (\((_,n,c,k),cs,fs) ->
-                                ImageInfo n c k cs
-                                    (map (\(key,v) -> BootFlag key v) fs)) lst
+        )
+        (
+            right . map (\((_,n,c,k),cs,fs) ->
+                ImageInfo n c k cs (map (\(key,v) -> BootFlag key v) fs))
+        )
 
-newUpload :: MVar Uploads -> NewImage -> EitherT ServantErr IO UploadID
-newUpload mups (NewImage n) = do
-    i <- liftIO $ modifyMVar mups (\(Uploads c us) ->
-                return ((Uploads (c+1) ((ActiveUpload c n Nothing []):us)),c))
-    right $ UploadID i
+newUpload :: DBConn -> MVar Uploads -> NewImage -> EitherT ServantErr IO UploadID
+newUpload conn mups (NewImage n) =
+    runTx conn ( do
+            (res :: Maybe (Identity Int))
+                <- lift $ H.maybeEx $ [H.stmt|
+                        SELECT id
+                        FROM "images"
+                        WHERE name = ?
+                    |] n
+            when (isJust res) $
+                throwE err400 { errBody = "an image with that name already exists" }
+        )
+        (\_ -> do
+            i <- liftIO $ modifyMVar mups (\(Uploads c us) ->
+                        return ((Uploads (c+1) ((ActiveUpload c n Nothing []):us)),c))
+            right $ UploadID i
+        )
 
 uploadKernel :: MVar Uploads -> Int -> [File FilePath] -> EitherT ServantErr IO ()
 uploadKernel _ _ []      = left $ err400 { errBody = "no file uploaded" }
@@ -163,20 +176,22 @@ uploadCPIO mups i files = do
         _ -> do liftIO $ forM_ newfiles (\(Just (new,old)) -> renameFile old new)
                 right ()
 
-imageAlreadyExists :: DBConn -> T.Text -> IO (Maybe ServantErr)
-imageAlreadyExists conn n = do
-    dbres <- liftIO $ do
-        H.session conn $ H.tx Nothing $ do
-            (res :: Maybe (Identity Int)) <- H.maybeEx $ [H.stmt|
+imageAlreadyExists :: DBConn -> T.Text -> EitherT ServantErr IO (Maybe ServantErr)
+imageAlreadyExists conn n =
+    runTx conn ( do
+            (res :: Maybe (Identity Int))
+                <- lift $ H.maybeEx $ [H.stmt|
                     SELECT id
                     FROM images
                     WHERE name = ?
                 |] n
             return res
-    case dbres of
-        Left err -> return $ Just err500 { errBody = BS.pack $ show err }
-        Right (Just _) -> return $ Just err400 { errBody = "image with that name already exists" }
-        Right Nothing -> return $ Nothing
+        )
+        (\res ->
+            case res of
+                Nothing -> right $ Nothing
+                Just _ -> right $ Just err400 { errBody = "image with that name already exists" }
+        )
 
 completeUpload :: Config -> DBConn -> MVar Uploads -> Int -> EitherT ServantErr IO UploadResults
 completeUpload (Config fd) conn mups i = do
@@ -190,9 +205,9 @@ completeUpload (Config fd) conn mups i = do
         Right (ActiveUpload _ _ Nothing _) -> right $ UploadResults False "kernel was not uploaded"
         Right (ActiveUpload _ _ _ []) -> right $ UploadResults False "cpio was not uploaded"
         Right (ActiveUpload _ n mkFile cs) -> do
-            merr <- liftIO $ imageAlreadyExists conn n
+            merr <- imageAlreadyExists conn n
             case merr of
-                Just err -> left $ err
+                Just err -> left err
                 Nothing -> do
                     (finalKFile,finalCFiles) <- liftIO $ do
                         uuid <- toString <$> nextRandom

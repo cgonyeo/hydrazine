@@ -56,7 +56,7 @@ type HydrazineAPI =
 server :: Config -> DBConn -> MVar Uploads -> Server HydrazineAPI
 server conf conn mups = (getBootInfo    conn)
                    :<|> (getImages      conn)
-                   :<|> (newUpload      mups)
+                   :<|> (newUpload      conn mups)
                    :<|> (uploadKernel   mups)
                    :<|> (uploadCPIO     mups)
                    :<|> (completeUpload conf conn mups)
