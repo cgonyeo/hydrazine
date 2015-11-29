@@ -1,6 +1,7 @@
 BEGIN; 
 
 DROP TABLE IF EXISTS "bootflags" CASCADE;
+DROP TABLE IF EXISTS "defaultbootflags" CASCADE;
 DROP TABLE IF EXISTS "cpios" CASCADE;
 DROP TABLE IF EXISTS "boots" CASCADE;
 DROP TABLE IF EXISTS "boxen" CASCADE;
@@ -31,7 +32,8 @@ CREATE TABLE "boxen" (
     boot_image INTEGER,
     boot_until TIMESTAMP,
     PRIMARY KEY (id),
-    UNIQUE (mac, name),
+    UNIQUE (name),
+    UNIQUE (mac),
     FOREIGN KEY (boot_image) REFERENCES "images" (id) ON DELETE CASCADE
 );
 
@@ -42,12 +44,18 @@ CREATE TABLE "bootflags" (
     FOREIGN KEY (box_id) REFERENCES "boxen" (id) ON DELETE CASCADE
 );
 
-CREATE TABLE "boots" (
-    box_id    INTEGER   NOT NULL,
-    image_id  INTEGER   NOT NULL,
-    boot_time TIMESTAMP NOT NULL,
-    FOREIGN KEY (box_id) REFERENCES "boxen" (id) ON DELETE CASCADE,
+CREATE TABLE "defaultbootflags" (
+    image_id INTEGER      NOT NULL,
+    key      VARCHAR(256) NOT NULL,
+    value    TEXT,
     FOREIGN KEY (image_id) REFERENCES "images" (id) ON DELETE CASCADE
+);
+
+CREATE TABLE "boots" (
+    box_id     INTEGER   NOT NULL,
+    image_name INTEGER   NOT NULL,
+    boot_time  TIMESTAMP NOT NULL,
+    FOREIGN KEY (box_id) REFERENCES "boxen" (id) ON DELETE CASCADE
 );
 
 COMMIT;

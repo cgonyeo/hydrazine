@@ -29,18 +29,20 @@ instance ToJSON BootInfo where
                , "cmdline" .= c
                ]
 
-data ImageInfo = ImageInfo { imgName :: T.Text
-                           , created :: LocalTime
-                           , imgKernel  :: T.Text
-                           , cpios   :: [T.Text]
+data ImageInfo = ImageInfo { imgName      :: T.Text
+                           , created      :: LocalTime
+                           , imgKernel    :: T.Text
+                           , cpios        :: [T.Text]
+                           , defaultflags :: [BootFlag]
                            } deriving(Eq,Show)
 
 instance ToJSON ImageInfo where
-    toJSON (ImageInfo n c k cs) =
-        object [ "name"    .= n
-               , "created" .= c
-               , "kernel"  .= k
-               , "cpios"   .= cs
+    toJSON (ImageInfo n c k cs fs) =
+        object [ "name"          .= n
+               , "created"       .= c
+               , "kernel"        .= k
+               , "cpios"         .= cs
+               , "default_flags" .= fs
                ]
 
 data BoxInfo = BoxInfo { boxName  :: T.Text
@@ -81,9 +83,14 @@ data BootFlag = BootFlag { flagName  :: T.Text
                          } deriving(Eq,Show)
 
 instance ToJSON BootFlag where
-    toJSON (BootFlag name val) = object [ "name"     .= name
-                                        , "value"    .= val
+    toJSON (BootFlag name val) = object [ "name"  .= name
+                                        , "value" .= val
                                         ]
+instance FromJSON BootFlag where
+    parseJSON (Object v) = BootFlag
+                             <$> v .: "name"
+                             <*> v .: "value"
+    parseJSON _          = empty
 
 data UploadID = UploadID { uploadID :: Int } deriving(Eq,Show)
 
@@ -105,22 +112,22 @@ instance FromJSON NewImage where
     parseJSON (Object v) = NewImage <$> v .: "name"
     parseJSON _          = empty
 
-data NewBox = NewBox { newBoxName :: T.Text
-                     , newBoxMac  :: T.Text
+data NewBox = NewBox { newBoxMac  :: T.Text
                      } deriving(Eq,Show)
 
 instance FromJSON NewBox where
     parseJSON (Object v) = NewBox
-                               <$> v .: "name"
-                               <*> v .: "mac"
+                               <$> v .: "mac"
     parseJSON _          = empty
 
-data UpdateBox = UpdateBox { bootImage :: T.Text
-                           , bootUntil :: LocalTime
+data UpdateBox = UpdateBox { bootImage :: Maybe T.Text
+                           , bootUntil :: Maybe LocalTime
+                           , bootFlags :: Maybe [BootFlag]
                            } deriving(Eq,Show)
 
 instance FromJSON UpdateBox where
     parseJSON (Object v) = UpdateBox
                                <$> v .: "image"
                                <*> v .: "until"
+                               <*> v .: "boot_flags"
     parseJSON _          = empty

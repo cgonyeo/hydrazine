@@ -12,6 +12,8 @@ import Data.Time.LocalTime
 import Control.Monad
 
 import qualified Hasql as H
+import qualified Hasql.Postgres as HP
+import qualified Hasql.Backend as HB
 import qualified Data.Text as T
 import qualified Data.ByteString.Lazy.Char8 as BS
 
@@ -81,10 +83,48 @@ getBoxen conn = do
                     }) lst
 
 newBox :: DBConn -> T.Text -> NewBox -> EitherT ServantErr IO ()
-newBox  = undefined
+newBox conn n (NewBox m) = do
+    dbres <- runTx conn $ do
+            H.unitEx $ [H.stmt|
+                    INSERT INTO "boxen"
+                        (name,mac)
+                    VALUES
+                        (?,?)
+                |] n (stripMac m)
+    case dbres of
+        Left err -> left err500 { errBody = BS.pack $ show err }
+        Right _ -> right ()
+
+runTx :: (MonadIO m1) => DBConn -> H.Tx HP.Postgres s2 a1 -> m1 (Either (H.SessionError HP.Postgres) a1)
+runTx conn stmt = liftIO $ H.session conn $ H.tx Nothing $ stmt
+
+--dbCheck :: (c -> Maybe ServantErr) -> Stmt c -> Tx c s r
+--dbCheck test statement = do
+--        result <- statement
+--        return test result
 
 updateBox :: DBConn -> T.Text -> UpdateBox -> EitherT ServantErr IO ()
-updateBox  = undefined
+updateBox = undefined
+--updateBox conn n (UpdateBox mImgName, mUntil, mFlags) = do
+--    dbres <- liftIO $ do
+--        H.session conn $ H.tx Nothing $ do
+--            when (mImg /= Nothing) do
+--                (mImgId :: Maybe (Identity Int)) <- H.maybeEx $ [H.stmt|
+--                        SELECT id
+--                        FROM "images"
+--                        WHERE name = ?
+--                    |]
+--                
+--                H.unitEx $ [H.stmt|
+--                        UPDATE "boxen"
+--                        SET 
+--                            (name,mac)
+--                        VALUES
+--                            (?,?)
+--                    |] n (stripMac m)
+--    case dbres of
+--        Left err -> left err500 { errBody = BS.pack $ show err }
+--        Right _ -> right ()
 
 deleteBox :: DBConn -> T.Text -> EitherT ServantErr IO ()
 deleteBox  = undefined

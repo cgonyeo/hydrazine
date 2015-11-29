@@ -79,7 +79,6 @@ getImages conn = do
                          , created
                          , kernel_path
                     FROM images
-                    WHERE active = TRUE
                     ORDER BY name ASC
                 |]
             cs <- forM imgs (\(imgId,_,_,_) -> do
@@ -92,11 +91,22 @@ getImages conn = do
                     let cs' = map (\(Identity x) -> x) cs
                     return cs'
                 )
-            return $ zip imgs cs
+            fs <- forM imgs (\(imgId,_,_,_) -> do
+                    (fs :: [(T.Text,Maybe T.Text)]) <- H.listEx $ [H.stmt|
+                            SELECT key
+                                 , value
+                            FROM defaultbootflags
+                            WHERE image_id = ?
+                            ORDER BY key ASC
+                        |] imgId
+                    return fs
+                )
+            return $ zip3 imgs cs fs
     case dbres of
         Left err -> left $ err500 { errBody = BS.pack $ show err }
-        Right lst -> right $ map (\((_,n,c,k),cs) ->
-                                ImageInfo n c k cs) lst
+        Right lst -> right $ map (\((_,n,c,k),cs,fs) ->
+                                ImageInfo n c k cs
+                                    (map (\(key,v) -> BootFlag key v) fs)) lst
 
 newUpload :: MVar Uploads -> NewImage -> EitherT ServantErr IO UploadID
 newUpload mups (NewImage n) = do
