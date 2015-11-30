@@ -28,6 +28,12 @@ instance ToJSON BootInfo where
                , "initrd"  .= i
                , "cmdline" .= c
                ]
+instance FromJSON BootInfo where
+    parseJSON (Object v) = BootInfo
+                             <$> v .: "kernel"
+                             <*> v .: "initrd"
+                             <*> v .: "cmdline"
+    parseJSON _          = empty
 
 data ImageInfo = ImageInfo { imgName      :: T.Text
                            , created      :: LocalTime
@@ -44,6 +50,14 @@ instance ToJSON ImageInfo where
                , "cpios"         .= cs
                , "default_flags" .= fs
                ]
+instance FromJSON ImageInfo where
+    parseJSON (Object v) = ImageInfo
+                             <$> v .: "name"
+                             <*> v .: "created"
+                             <*> v .: "kernel"
+                             <*> v .: "cpios"
+                             <*> v .: "default_flags"
+    parseJSON _          = empty
 
 data BoxInfo = BoxInfo { boxName  :: T.Text
                        , mac      :: T.Text
@@ -57,6 +71,13 @@ instance ToJSON BoxInfo where
                             , "boot"     .= boot     boxInfo
                             , "bootlogs" .= bootlogs boxInfo
                             ]
+instance FromJSON BoxInfo where
+    parseJSON (Object v) = BoxInfo
+                             <$> v .: "name"
+                             <*> v .: "mac"
+                             <*> v .: "boot"
+                             <*> v .: "bootlogs"
+    parseJSON _          = empty
 
 data BootInstance = BootInstance { bootImg  :: T.Text
                                  , bootTime :: LocalTime
@@ -66,6 +87,11 @@ instance ToJSON BootInstance where
     toJSON (BootInstance img time) = object [ "image_name" .= img
                                             , "timestamp"  .= time
                                             ]
+instance FromJSON BootInstance where
+    parseJSON (Object v) = BootInstance
+                             <$> v .: "image_name"
+                             <*> v .: "timestamp"
+    parseJSON _          = empty
 
 data BootSettings = BootSettings { image :: T.Text
                                  , until :: LocalTime
@@ -77,6 +103,12 @@ instance ToJSON BootSettings where
                                           , "until" .= u
                                           , "flags" .= fs
                                           ]
+instance FromJSON BootSettings where
+    parseJSON (Object v) = BootSettings
+                             <$> v .: "image"
+                             <*> v .: "until"
+                             <*> v .: "flags"
+    parseJSON _          = empty
 
 data BootFlag = BootFlag { flagName  :: T.Text
                          , flagValue :: Maybe T.Text
@@ -97,7 +129,14 @@ data UploadID = UploadID { uploadID :: Int } deriving(Eq,Show)
 instance ToJSON UploadID where
     toJSON (UploadID i) = object [ "id" .= i ]
 
+instance FromJSON UploadID where
+    parseJSON (Object v) = UploadID <$> v .: "id"
+    parseJSON _          = empty
+
 data NewImage = NewImage { newImgName :: T.Text } deriving(Eq,Show)
+
+instance ToJSON NewImage where
+    toJSON (NewImage name) = object [ "name" .= name ]
 
 instance FromJSON NewImage where
     parseJSON (Object v) = NewImage <$> v .: "name"
@@ -105,6 +144,9 @@ instance FromJSON NewImage where
 
 data NewBox = NewBox { newBoxMac  :: T.Text
                      } deriving(Eq,Show)
+
+instance ToJSON NewBox where
+    toJSON (NewBox name) = object [ "name" .= name ]
 
 instance FromJSON NewBox where
     parseJSON (Object v) = NewBox
@@ -115,6 +157,12 @@ data UpdateBox = UpdateBox { bootImage :: Maybe T.Text
                            , bootUntil :: Maybe LocalTime
                            , bootFlags :: Maybe [BootFlag]
                            } deriving(Eq,Show)
+
+instance ToJSON UpdateBox where
+    toJSON (UpdateBox img til fs) = object [ "image"      .= img
+                                           , "until"      .= til
+                                           , "boot_flags" .= fs
+                                           ]
 
 instance FromJSON UpdateBox where
     parseJSON (Object v) = UpdateBox

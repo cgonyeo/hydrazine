@@ -12,6 +12,8 @@ import qualified Data.ByteString.Lazy as BS
 import Control.Monad.Trans.Resource
 import Network.Wai.Parse
 import Servant
+import Servant.Client
+import Control.Monad.Trans.Either
 
 data Mem
 
@@ -49,3 +51,8 @@ instance (KnownBackend b, HasServer api) => HasServer (Files b :> api) where
 
 type FilesMem = Files Mem
 type FilesTmp = Files Tmp
+
+instance HasClient (FilesTmp :> Post '[] a) where
+        type Client (FilesTmp :> Post '[] a) = EitherT ServantError IO a
+
+        clientWithRoute Proxy req baseurl = undefined
