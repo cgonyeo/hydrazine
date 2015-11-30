@@ -6,6 +6,8 @@ import Data.Aeson
 import Control.Applicative
 import Data.Time.LocalTime
 import Data.Char
+import Servant
+import Control.Monad.Trans.Either
 
 import qualified Data.Text as T
 
@@ -170,3 +172,14 @@ instance FromJSON UpdateBox where
                                <*> v .: "until"
                                <*> v .: "boot_flags"
     parseJSON _          = empty
+
+data EmptyValue = EmptyValue Int
+
+instance ToJSON EmptyValue where
+    toJSON (EmptyValue sdf) = object ["sdf" .= sdf]
+instance FromJSON EmptyValue where
+    parseJSON (Object v) = EmptyValue <$> v .: "sdf"
+    parseJSON _          = empty
+
+returnEmptyValue :: a -> EitherT ServantErr IO EmptyValue
+returnEmptyValue _ = right $ EmptyValue 1

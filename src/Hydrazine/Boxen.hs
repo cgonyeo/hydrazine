@@ -76,9 +76,9 @@ getBoxen conn = do
                     })
      )
 
-newBox :: DBConn -> T.Text -> NewBox -> EitherT ServantErr IO ()
+newBox :: DBConn -> T.Text -> NewBox -> EitherT ServantErr IO EmptyValue
 newBox conn n (NewBox m) = do
-    runTx_ conn (do
+    runTx conn (do
             (res :: Maybe (Identity Int)) <- lift $ H.maybeEx $ [H.stmt|
                     SELECT id
                     FROM "boxen"
@@ -99,11 +99,11 @@ newBox conn n (NewBox m) = do
                     VALUES
                         (?,?)
                 |] n (stripMac m)
-        )
+        ) (returnEmptyValue)
 
-updateBox :: DBConn -> T.Text -> UpdateBox -> EitherT ServantErr IO ()
+updateBox :: DBConn -> T.Text -> UpdateBox -> EitherT ServantErr IO EmptyValue
 updateBox conn name (UpdateBox img til fs) =
-    runTx_ conn (do
+    runTx conn (do
             (boxId :: Maybe (Identity Int))
                 <- lift $ H.maybeEx $ [H.stmt|
                         SELECT id
@@ -148,7 +148,7 @@ updateBox conn name (UpdateBox img til fs) =
                                     (?,?,?)
                             |] (unwrapId $ fromJust boxId) key val
                     )
-        )
+        ) (returnEmptyValue)
 
 deleteBox :: DBConn -> T.Text -> EitherT ServantErr IO ()
 deleteBox conn name = 

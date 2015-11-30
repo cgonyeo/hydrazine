@@ -29,8 +29,8 @@ type HydrazineAPI =
    :<|> "images" :> "upload" :> "complete" :> Capture "uploadID" Int :> Post '[JSON] ()
    :<|> "images" :> Capture "name" T.Text :> Delete '[] ()
    :<|> "machines" :> Get '[JSON] [BoxInfo]
-   :<|> "machines" :> Capture "name" T.Text :> ReqBody '[JSON] NewBox :> Post '[] ()
-   :<|> "machines" :> Capture "name" T.Text :> ReqBody '[JSON] UpdateBox :> Put '[] ()
+   :<|> "machines" :> Capture "name" T.Text :> ReqBody '[JSON] NewBox :> Post '[JSON] EmptyValue
+   :<|> "machines" :> Capture "name" T.Text :> ReqBody '[JSON] UpdateBox :> Put '[JSON] EmptyValue
    :<|> "machines" :> Capture "name" T.Text :> Delete '[] ()
    :<|> "files" :> Raw
 

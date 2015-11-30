@@ -34,9 +34,9 @@ deleteImage :: T.Text -> EitherT ServantError IO ()
 
 getMachines :: EitherT ServantError IO [BoxInfo]
 
-newMachine :: T.Text -> NewBox -> EitherT ServantError IO ()
+newMachine :: T.Text -> NewBox -> EitherT ServantError IO EmptyValue
 
-updateMachine :: T.Text -> UpdateBox -> EitherT ServantError IO ()
+updateMachine :: T.Text -> UpdateBox -> EitherT ServantError IO EmptyValue
 
 deleteMachine :: T.Text -> EitherT ServantError IO ()
 
