@@ -53,10 +53,9 @@ getBoxen conn = do
                         |] boxId
                    (logs :: [(T.Text,LocalTime)])
                        <- lift $ H.listEx $ [H.stmt|
-                           SELECT images.name
-                                , boots.boot_time
+                           SELECT image_name
+                                , boot_time
                            FROM boots
-                           INNER JOIN images ON (boots.image_id = images.id)
                            WHERE boots.box_id = ?
                            ORDER BY boots.boot_time DESC
                        |] boxId
@@ -66,11 +65,10 @@ getBoxen conn = do
      )
      (   right . map (\((_,name,macaddr,_,mUntil),(mName,bFlags,logs)) ->
             BoxInfo { boxName = name
-                    , mac     = macaddr
-                    , boot    = case (mName,mUntil) of
-                                    (Just iName,Just til) ->
-                                        Just $ BootSettings
-                                            iName til (map (\(k,v) -> BootFlag k v) bFlags)
+                    , mac     = formatMac macaddr
+                    , boot    = case mName of
+                                    Just iName -> Just $ BootSettings
+                                        iName mUntil (map (\(k,v) -> BootFlag k v) bFlags)
                                     _ -> Nothing
                     , bootlogs = map (\(n,t) -> BootInstance n t) logs
                     })

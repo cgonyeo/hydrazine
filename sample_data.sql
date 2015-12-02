@@ -1,5 +1,7 @@
 BEGIN; 
 
+/* Image 1 */
+
 INSERT INTO "images"
         (name,kernel_path,created)
     VALUES
@@ -15,10 +17,24 @@ INSERT INTO "defaultbootflags"
     VALUES
         (1,'user','single');
 
+/* Image 2 */
+
+INSERT INTO "images"
+        (name,kernel_path,created)
+    VALUES
+        ('coreos','coreos/vmlinuz',now());
+
+INSERT INTO "cpios"
+        (image_id,ordering,cpio_path)
+    VALUES
+        (1,0,'coreos/coreos.cpio.gz');
+
 INSERT INTO "defaultbootflags"
         (image_id,key,value)
     VALUES
         (1,'coreos.autologin',NULL);
+
+/* Box 1 */
 
 INSERT INTO "boxen"
         (name,mac,boot_image,boot_until)
@@ -34,5 +50,17 @@ INSERT INTO "bootflags"
         (box_id,key,value)
     VALUES
         (1,'key2',NULL);
+
+/* Box 2 */
+
+INSERT INTO "boxen"
+        (name,mac,boot_image,boot_until)
+    VALUES
+        ('toothpaste','BCAEC5126848',1,now());
+
+INSERT INTO "bootflags"
+        (box_id,key,value)
+    VALUES
+        (1,'coreos.autologin',NULL);
 
 COMMIT;

@@ -17,7 +17,7 @@ stripMac = T.filter (isAlphaNum) . T.toUpper
 formatMac :: T.Text -> T.Text
 formatMac m 
   | T.length m < 2 = m
-  | otherwise      = T.take 2 m `T.append` ":" `T.append` formatMac (T.drop 2 m)
+  | otherwise      = (T.toUpper $ T.take 2 m) `T.append` ":" `T.append` formatMac (T.drop 2 m)
 
 data BootInfo = BootInfo { kernel  :: T.Text
                          , initrd  :: [T.Text]
@@ -96,7 +96,7 @@ instance FromJSON BootInstance where
     parseJSON _          = empty
 
 data BootSettings = BootSettings { image :: T.Text
-                                 , until :: LocalTime
+                                 , until :: Maybe LocalTime
                                  , flags :: [BootFlag]
                                  } deriving(Eq,Show)
 
