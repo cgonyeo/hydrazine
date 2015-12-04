@@ -2,7 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Hydrazine.Boot where
+module Hydrazine.Server.Boot where
 
 import Servant
 import Control.Monad.Trans.Either
@@ -17,7 +17,7 @@ import qualified Hasql as H
 import qualified Data.Text as T
 
 import Hydrazine.JSON
-import Hydrazine.Postgres
+import Hydrazine.Server.Postgres
 
 getBootInfo :: DBConn -> T.Text -> EitherT ServantErr IO BootInfo
 getBootInfo conn macaddr =

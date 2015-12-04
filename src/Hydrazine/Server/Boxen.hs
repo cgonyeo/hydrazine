@@ -2,7 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Hydrazine.Boxen where
+module Hydrazine.Server.Boxen where
 
 import Servant
 import Control.Monad.Trans.Either
@@ -17,7 +17,7 @@ import qualified Hasql as H
 import qualified Data.Text as T
 
 import Hydrazine.JSON
-import Hydrazine.Postgres
+import Hydrazine.Server.Postgres
 
 getBoxen :: DBConn -> EitherT ServantErr IO [BoxInfo]
 getBoxen conn = do

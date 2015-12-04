@@ -1,6 +1,7 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RankNTypes #-}
-module Hydrazine.Postgres where
+
+module Hydrazine.Server.Postgres where
 
 import qualified Hasql as H
 import qualified Hasql.Postgres as HP

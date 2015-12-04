@@ -5,7 +5,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
-module Hydrazine.FileBackend where
+module Hydrazine.Server.FileBackend where
 
 import qualified Data.ByteString.Lazy as BS
 

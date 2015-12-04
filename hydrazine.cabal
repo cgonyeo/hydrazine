@@ -17,7 +17,7 @@ build-type:          Simple
 cabal-version:       >=1.10
 
 executable hydrazine
-  main-is:             Main.hs
+  main-is:             Main-Server.hs
   -- other-modules:       
   -- other-extensions:    
   build-depends:       base                  >=4.8  && <4.9

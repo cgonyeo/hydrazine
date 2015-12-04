@@ -2,7 +2,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Hydrazine.Images where
+module Hydrazine.Server.Images where
 
 import Servant
 import Control.Monad.Trans.Either
@@ -23,9 +23,9 @@ import Control.Monad.Trans.Except
 import qualified Hasql as H
 import qualified Data.Text as T
 
-import Hydrazine.Config
 import Hydrazine.JSON
-import Hydrazine.Postgres
+import Hydrazine.Server.Config
+import Hydrazine.Server.Postgres
 
 data Uploads = Uploads { uploadCounter :: Int
                        , activeUploads :: [ActiveUpload]

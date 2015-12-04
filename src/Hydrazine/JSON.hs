@@ -11,6 +11,61 @@ import Control.Monad.Trans.Either
 
 import qualified Data.Text as T
 
+data BootInfo = BootInfo
+        { kernel  :: T.Text
+        , initrd  :: [T.Text]
+        , cmdline :: Value
+        } deriving(Eq,Show)
+
+data ImageInfo = ImageInfo
+        { imgName      :: T.Text            -- JSON: name
+        , created      :: LocalTime
+        , imgKernel    :: T.Text            -- JSON: kernel
+        , cpios        :: [T.Text]
+        , defaultflags :: [BootFlag]        -- JSON: default_flags
+        } deriving(Eq,Show)
+
+data BoxInfo = BoxInfo
+        { boxName  :: T.Text                -- JSON: name
+        , mac      :: T.Text
+        , boot     :: Maybe BootSettings
+        , bootlogs :: [BootInstance]
+        } deriving(Eq,Show)
+
+data BootInstance = BootInstance
+        { bootImg  :: T.Text                -- JSON: image_name
+        , bootTime :: LocalTime             -- JSON: timestamp
+        } deriving(Eq,Show)
+
+data BootSettings = BootSettings
+        { image :: T.Text
+        , until :: Maybe LocalTime
+        , flags :: [BootFlag]
+        } deriving(Eq,Show)
+
+data BootFlag = BootFlag
+        { flagName  :: T.Text               -- JSON: name
+        , flagValue :: Maybe T.Text         -- JSON: value
+        } deriving(Eq,Show)
+
+data UploadID = UploadID
+        { uploadID :: Int                   -- JSON: id
+        } deriving(Eq,Show)
+
+data NewImage = NewImage
+        { newImgName :: T.Text              -- JSON: name
+        } deriving(Eq,Show)
+
+data NewBox = NewBox
+        { newBoxMac  :: T.Text              -- JSON: mac
+        } deriving(Eq,Show)
+
+data UpdateBox = UpdateBox
+        { bootImage :: Maybe T.Text         -- JSON: image
+        , bootUntil :: Maybe LocalTime      -- JSON: until
+        , bootFlags :: Maybe [BootFlag]     -- JSON: boot_flags
+        } deriving(Eq,Show)
+
 stripMac :: T.Text -> T.Text
 stripMac = T.filter (isAlphaNum) . T.toUpper
 
@@ -18,11 +73,6 @@ formatMac :: T.Text -> T.Text
 formatMac m 
   | T.length m < 2 = m
   | otherwise      = (T.toUpper $ T.take 2 m) `T.append` ":" `T.append` formatMac (T.drop 2 m)
-
-data BootInfo = BootInfo { kernel  :: T.Text
-                         , initrd  :: [T.Text]
-                         , cmdline :: Value
-                         } deriving(Eq,Show)
 
 instance ToJSON BootInfo where
     toJSON (BootInfo k i c) = 
@@ -36,13 +86,6 @@ instance FromJSON BootInfo where
                              <*> v .: "initrd"
                              <*> v .: "cmdline"
     parseJSON _          = empty
-
-data ImageInfo = ImageInfo { imgName      :: T.Text
-                           , created      :: LocalTime
-                           , imgKernel    :: T.Text
-                           , cpios        :: [T.Text]
-                           , defaultflags :: [BootFlag]
-                           } deriving(Eq,Show)
 
 instance ToJSON ImageInfo where
     toJSON (ImageInfo n c k cs fs) =
@@ -61,12 +104,6 @@ instance FromJSON ImageInfo where
                              <*> v .: "default_flags"
     parseJSON _          = empty
 
-data BoxInfo = BoxInfo { boxName  :: T.Text
-                       , mac      :: T.Text
-                       , boot     :: Maybe BootSettings
-                       , bootlogs :: [BootInstance]
-                       } deriving(Eq,Show)
-
 instance ToJSON BoxInfo where
     toJSON boxInfo = object [ "name"     .= boxName  boxInfo
                             , "mac"      .= mac      boxInfo
@@ -81,10 +118,6 @@ instance FromJSON BoxInfo where
                              <*> v .: "bootlogs"
     parseJSON _          = empty
 
-data BootInstance = BootInstance { bootImg  :: T.Text
-                                 , bootTime :: LocalTime
-                                 } deriving(Eq,Show)
-
 instance ToJSON BootInstance where
     toJSON (BootInstance img time) = object [ "image_name" .= img
                                             , "timestamp"  .= time
@@ -94,11 +127,6 @@ instance FromJSON BootInstance where
                              <$> v .: "image_name"
                              <*> v .: "timestamp"
     parseJSON _          = empty
-
-data BootSettings = BootSettings { image :: T.Text
-                                 , until :: Maybe LocalTime
-                                 , flags :: [BootFlag]
-                                 } deriving(Eq,Show)
 
 instance ToJSON BootSettings where
     toJSON (BootSettings i u fs) = object [ "image" .= i
@@ -112,10 +140,6 @@ instance FromJSON BootSettings where
                              <*> v .: "flags"
     parseJSON _          = empty
 
-data BootFlag = BootFlag { flagName  :: T.Text
-                         , flagValue :: Maybe T.Text
-                         } deriving(Eq,Show)
-
 instance ToJSON BootFlag where
     toJSON (BootFlag name val) = object [ "name"  .= name
                                         , "value" .= val
@@ -126,16 +150,12 @@ instance FromJSON BootFlag where
                              <*> v .: "value"
     parseJSON _          = empty
 
-data UploadID = UploadID { uploadID :: Int } deriving(Eq,Show)
-
 instance ToJSON UploadID where
     toJSON (UploadID i) = object [ "id" .= i ]
 
 instance FromJSON UploadID where
     parseJSON (Object v) = UploadID <$> v .: "id"
     parseJSON _          = empty
-
-data NewImage = NewImage { newImgName :: T.Text } deriving(Eq,Show)
 
 instance ToJSON NewImage where
     toJSON (NewImage name) = object [ "name" .= name ]
@@ -144,9 +164,6 @@ instance FromJSON NewImage where
     parseJSON (Object v) = NewImage <$> v .: "name"
     parseJSON _          = empty
 
-data NewBox = NewBox { newBoxMac  :: T.Text
-                     } deriving(Eq,Show)
-
 instance ToJSON NewBox where
     toJSON (NewBox name) = object [ "name" .= name ]
 
@@ -154,11 +171,6 @@ instance FromJSON NewBox where
     parseJSON (Object v) = NewBox
                                <$> v .: "mac"
     parseJSON _          = empty
-
-data UpdateBox = UpdateBox { bootImage :: Maybe T.Text
-                           , bootUntil :: Maybe LocalTime
-                           , bootFlags :: Maybe [BootFlag]
-                           } deriving(Eq,Show)
 
 instance ToJSON UpdateBox where
     toJSON (UpdateBox img til fs) = object [ "image"      .= img

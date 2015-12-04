@@ -15,7 +15,7 @@ import qualified Data.Text as T
 import qualified Data.ByteString.Lazy as BS
 import qualified Network.HTTP.Types.Header as H (Header)
 
-import Hydrazine.API
+import Hydrazine.Server.API
 import Hydrazine.JSON
 
 getBootInfo :: T.Text -> EitherT ServantError IO BootInfo

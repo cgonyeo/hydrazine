@@ -2,20 +2,14 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Hydrazine.API where
+module Hydrazine.Server.API where
 
 import Servant
-import Control.Concurrent.MVar
 
 import qualified Data.Text as T
 
 import Hydrazine.JSON
-import Hydrazine.Postgres
-import Hydrazine.Boot
-import Hydrazine.Images
-import Hydrazine.Boxen
-import Hydrazine.FileBackend
-import Hydrazine.Config
+import Hydrazine.Server.FileBackend
 
 hydrazineAPI :: Proxy HydrazineAPI
 hydrazineAPI = Proxy
@@ -33,17 +27,3 @@ type HydrazineAPI =
    :<|> "machines" :> Capture "name" T.Text :> ReqBody '[JSON] UpdateBox :> Put '[JSON] EmptyValue
    :<|> "machines" :> Capture "name" T.Text :> Delete '[] ()
    :<|> "files" :> Raw
-
-server :: Config -> DBConn -> MVar Uploads -> Server HydrazineAPI
-server conf conn mups = (getBootInfo    conn)
-                   :<|> (getImages      conn)
-                   :<|> (newUpload      conn mups)
-                   :<|> (uploadKernel   mups)
-                   :<|> (uploadCPIO     mups)
-                   :<|> (completeUpload conf conn mups)
-                   :<|> (deleteImage    conn)
-                   :<|> (getBoxen       conn)
-                   :<|> (newBox         conn)
-                   :<|> (updateBox      conn)
-                   :<|> (deleteBox      conn)
-                   :<|> (serveDirectory ".")

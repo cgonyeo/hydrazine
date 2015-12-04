@@ -10,10 +10,12 @@ import Servant
 import Control.Concurrent.MVar
 import Options.Applicative
 
-import Hydrazine.API
-import Hydrazine.Config
-import Hydrazine.Postgres
-import Hydrazine.Images
+import Hydrazine.Server.API
+import Hydrazine.Server.Postgres
+import Hydrazine.Server.Boot
+import Hydrazine.Server.Images
+import Hydrazine.Server.Boxen
+import Hydrazine.Server.Config
 
 main :: IO ()
 main = execParser opts >>= initAndRun
@@ -30,3 +32,17 @@ initAndRun conf = do
 
 app :: Config -> DBConn -> MVar Uploads -> Application
 app conf conn mups = serve hydrazineAPI (server conf conn mups)
+
+server :: Config -> DBConn -> MVar Uploads -> Server HydrazineAPI
+server conf conn mups = (getBootInfo    conn)
+                   :<|> (getImages      conn)
+                   :<|> (newUpload      conn mups)
+                   :<|> (uploadKernel   mups)
+                   :<|> (uploadCPIO     mups)
+                   :<|> (completeUpload conf conn mups)
+                   :<|> (deleteImage    conn)
+                   :<|> (getBoxen       conn)
+                   :<|> (newBox         conn)
+                   :<|> (updateBox      conn)
+                   :<|> (deleteBox      conn)
+                   :<|> (serveDirectory ".")

@@ -1,4 +1,4 @@
-module Hydrazine.Config where
+module Hydrazine.Server.Config where
 
 import Options.Applicative
 
