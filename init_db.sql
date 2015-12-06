@@ -8,10 +8,10 @@ DROP TABLE IF EXISTS "boxen" CASCADE;
 DROP TABLE IF EXISTS "images" CASCADE;
 
 CREATE TABLE "images" (
-    id           SERIAL       NOT NULL,
-    name         VARCHAR(256) UNIQUE NOT NULL,
-    kernel_path  TEXT         UNIQUE NOT NULL,
-    created      TIMESTAMP    NOT NULL,
+    id           SERIAL      NOT NULL,
+    name         VARCHAR(16) UNIQUE NOT NULL,
+    kernel_path  TEXT        UNIQUE NOT NULL,
+    created      TIMESTAMP   NOT NULL,
     UNIQUE (name),
     PRIMARY KEY (id)
 );
@@ -26,11 +26,12 @@ CREATE TABLE "cpios" (
 );
 
 CREATE TABLE "boxen" (
-    id         SERIAL       NOT NULL,
-    name       VARCHAR(256) NOT NULL,
-    mac        VARCHAR(12)  NOT NULL,
-    boot_image INTEGER,
-    boot_until TIMESTAMP,
+    id           SERIAL      NOT NULL,
+    name         VARCHAR(16) NOT NULL,
+    mac          VARCHAR(12) NOT NULL,
+    boot_image   INTEGER,
+    boot_until   TIMESTAMP,
+    boot_forever BOOLEAN     NOT NULL,
     PRIMARY KEY (id),
     UNIQUE (name),
     UNIQUE (mac),
@@ -52,9 +53,9 @@ CREATE TABLE "defaultbootflags" (
 );
 
 CREATE TABLE "boots" (
-    box_id     INTEGER   NOT NULL,
-    image_name INTEGER   NOT NULL,
-    boot_time  TIMESTAMP NOT NULL,
+    box_id     INTEGER     NOT NULL,
+    image_name VARCHAR(16) NOT NULL,
+    boot_time  TIMESTAMP   NOT NULL,
     FOREIGN KEY (box_id) REFERENCES "boxen" (id) ON DELETE CASCADE
 );
 

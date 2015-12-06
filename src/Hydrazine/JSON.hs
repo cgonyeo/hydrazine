@@ -3,6 +3,7 @@
 module Hydrazine.JSON where
 
 import Data.Aeson
+import Data.Time.Calendar
 import Control.Applicative
 import Data.Time.LocalTime
 import Data.Char
@@ -39,7 +40,7 @@ data BootInstance = BootInstance
 
 data BootSettings = BootSettings
         { image :: T.Text
-        , until :: Maybe LocalTime
+        , until :: BootUntil
         , flags :: [BootFlag]
         } deriving(Eq,Show)
 
@@ -60,19 +61,27 @@ data NewBox = NewBox
         { newBoxMac  :: T.Text              -- JSON: mac
         } deriving(Eq,Show)
 
+data BootUntil = BootUntil
+        { untilForever  :: Bool             -- JSON: forever
+        , untilThisTime :: Maybe LocalTime  -- JSON: time
+        } deriving(Eq,Show)
+
 data UpdateBox = UpdateBox
         { bootImage :: Maybe T.Text         -- JSON: image
-        , bootUntil :: Maybe LocalTime      -- JSON: until
+        , bootUntil :: Maybe BootUntil      -- JSON: until
         , bootFlags :: Maybe [BootFlag]     -- JSON: boot_flags
         } deriving(Eq,Show)
+
+aTime :: LocalTime
+aTime = LocalTime (ModifiedJulianDay 0) (TimeOfDay 0 0 0)
 
 stripMac :: T.Text -> T.Text
 stripMac = T.filter (isAlphaNum) . T.toUpper
 
 formatMac :: T.Text -> T.Text
 formatMac m 
-  | T.length m < 2 = m
-  | otherwise      = (T.toUpper $ T.take 2 m) `T.append` ":" `T.append` formatMac (T.drop 2 m)
+  | T.length m <= 2 = m
+  | otherwise       = (T.toUpper $ T.take 2 m) `T.append` ":" `T.append` formatMac (T.drop 2 m)
 
 instance ToJSON BootInfo where
     toJSON (BootInfo k i c) = 
@@ -170,6 +179,17 @@ instance ToJSON NewBox where
 instance FromJSON NewBox where
     parseJSON (Object v) = NewBox
                                <$> v .: "mac"
+    parseJSON _          = empty
+
+instance ToJSON BootUntil where
+    toJSON (BootUntil f t) = object [ "forever" .= f
+                                    , "time"    .= t
+                                    ]
+
+instance FromJSON BootUntil where
+    parseJSON (Object v) = BootUntil
+                               <$> v .: "forever"
+                               <*> v .: "time"
     parseJSON _          = empty
 
 instance ToJSON UpdateBox where

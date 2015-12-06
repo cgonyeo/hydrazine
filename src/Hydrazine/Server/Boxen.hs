@@ -22,17 +22,18 @@ import Hydrazine.Server.Postgres
 getBoxen :: DBConn -> EitherT ServantErr IO [BoxInfo]
 getBoxen conn = do
     runTx conn (
-      do (boxen :: [(Int,T.Text,T.Text,Maybe Int,Maybe LocalTime)])
+      do (boxen :: [(Int,T.Text,T.Text,Maybe Int,Maybe LocalTime,Bool)])
              <- lift $ H.listEx $ [H.stmt|
                   SELECT id
                        , name
                        , mac
                        , boot_image
                        , boot_until
+                       , boot_forever
                   FROM boxen
                   ORDER BY name ASC
              |]
-         boxInfos <- forM boxen (\(boxId,_,_,mImg,_)
+         boxInfos <- forM boxen (\(boxId,_,_,mImg,_,_)
              -> do mName <- case mImg of
                                 Nothing -> return Nothing
                                 Just imgId -> do
@@ -63,15 +64,75 @@ getBoxen conn = do
              )
          return $ zip boxen boxInfos
      )
-     (   right . map (\((_,name,macaddr,_,mUntil),(mName,bFlags,logs)) ->
+     (   right . map (\((_,name,macaddr,_,mUntil,bForever),(mName,bFlags,logs)) ->
             BoxInfo { boxName = name
                     , mac     = formatMac macaddr
-                    , boot    = case mName of
-                                    Just iName -> Just $ BootSettings
-                                        iName mUntil (map (\(k,v) -> BootFlag k v) bFlags)
-                                    _ -> Nothing
+                    , boot    = let fs = map (\(k,v) -> BootFlag k v) bFlags
+                                in case mName of
+                                       Nothing -> Nothing
+                                       Just iName -> Just $ BootSettings
+                                            iName (BootUntil bForever mUntil) fs
                     , bootlogs = map (\(n,t) -> BootInstance n t) logs
                     })
+     )
+
+getBox :: DBConn -> T.Text -> EitherT ServantErr IO BoxInfo
+getBox conn n = do
+    runTx conn (
+      do (mBox :: Maybe (Int,T.Text,T.Text,Maybe Int,Maybe LocalTime,Bool))
+             <- lift $ H.maybeEx $ [H.stmt|
+                  SELECT id
+                       , name
+                       , mac
+                       , boot_image
+                       , boot_until
+                       , boot_forever
+                  FROM boxen
+                  WHERE name = ?
+                  ORDER BY name ASC
+             |] n
+         when (isNothing mBox) $
+            throwE err404 { errBody = "machine not found" }
+
+         let box@(boxId,_,_,mImg,_,_) = fromJust mBox
+
+         mName <- case mImg of
+                      Nothing -> return Nothing
+                      Just imgId -> do
+                          (mname :: Maybe (Identity T.Text))
+                              <- lift $ H.maybeEx $ [H.stmt|
+                                  SELECT name
+                                  FROM images
+                                  WHERE id = ?
+                              |] imgId
+                          return (mname >>= (Just . unwrapId))
+         (bFlags :: [(T.Text,Maybe T.Text)])
+              <- lift $ H.listEx $ [H.stmt|
+                  SELECT key
+                       , value
+                  FROM bootflags
+                  WHERE box_id = ?
+                  ORDER BY key ASC
+              |] boxId
+         (logs :: [(T.Text,LocalTime)])
+             <- lift $ H.listEx $ [H.stmt|
+                 SELECT image_name
+                      , boot_time
+                 FROM boots
+                 WHERE boots.box_id = ?
+                 ORDER BY boots.boot_time DESC
+             |] boxId
+         return (box,mName,bFlags,logs)
+     )
+     (  
+        \((_,_,macaddr,_,mUntil,bForever),mName,bFlags,logs) ->
+            right $
+            BoxInfo { boxName = n
+                    , mac     = formatMac macaddr
+                    , boot    = mName >>= (\iName -> Just $ BootSettings
+                                                iName (BootUntil bForever mUntil) (map (\(k,v) -> BootFlag k v) bFlags))
+                    , bootlogs = map (\(i,t) -> BootInstance i t) logs
+                    }
      )
 
 newBox :: DBConn -> T.Text -> NewBox -> EitherT ServantErr IO EmptyValue
@@ -111,27 +172,56 @@ updateBox conn name (UpdateBox img til fs) =
             when (isNothing boxId) $
                 throwE err400 { errBody = "a box with that name doesn't exist" }
 
-            when (isJust img) $ do
-                (imgId :: Maybe (Identity Int))
-                    <- lift $ H.maybeEx $ [H.stmt|
-                            SELECT id
-                            FROM "images"
-                            WHERE name = ?
-                        |] img
-                when (isNothing imgId) $
-                    throwE err400 { errBody = "an image with that name doesn't exist" }
-                lift $ H.unitEx $ [H.stmt|
-                        UPDATE "boxen"
-                        SET boot_image = ?
-                        WHERE name = ?
-                    |] (unwrapId $ fromJust imgId) name
+            when (isJust img) $
+                if (fromJust img) == ""
+                    then lift $ H.unitEx $ [H.stmt|
+                                UPDATE "boxen"
+                                SET boot_image = NULL
+                                WHERE name = ?
+                            |] name
+                    else do
+                        (imgId :: Maybe (Identity Int))
+                            <- lift $ H.maybeEx $ [H.stmt|
+                                    SELECT id
+                                    FROM "images"
+                                    WHERE name = ?
+                                |] img
+                        when (isNothing imgId) $
+                            throwE err400 { errBody = "image doesn't exist" }
+                        lift $ H.unitEx $ [H.stmt|
+                                UPDATE "boxen"
+                                SET boot_image = ?
+                                WHERE name = ?
+                            |] (unwrapId $ fromJust imgId) name
+                        when (isNothing fs) $ do
+                            lift $ H.unitEx $ [H.stmt|
+                                    DELETE FROM "bootflags"
+                                    WHERE box_id = ?
+                                |] (unwrapId $ fromJust boxId)
+                            (bfs :: [(T.Text,Maybe T.Text)])
+                                <- lift $ H.listEx $ [H.stmt|
+                                    SELECT key
+                                         , value
+                                    FROM "defaultbootflags"
+                                    WHERE image_id = ?
+                                |] (unwrapId $ fromJust imgId)
+                            forM_ bfs (\(key,val) ->
+                                lift $ H.unitEx $ [H.stmt|
+                                        INSERT INTO "bootflags"
+                                            (box_id,key,value)
+                                        VALUES
+                                            (?,?,?)
+                                    |] (unwrapId $ fromJust boxId) key val
+                                )
 
             when (isJust til) $ 
-                lift $ H.unitEx $ [H.stmt|
+                let (BootUntil bForever mUntil) = fromJust til
+                in lift $ H.unitEx $ [H.stmt|
                         UPDATE "boxen"
-                        SET boot_until = ?
+                        SET boot_forever = ?
+                          , boot_until = ?
                         WHERE name = ?
-                    |] (fromJust til) name
+                    |] bForever mUntil name
 
             when (isJust fs) $ do
                 lift $ H.unitEx $ [H.stmt|
@@ -174,6 +264,6 @@ deleteBox conn name =
 
             lift $ H.unitEx $ [H.stmt|
                     DELETE FROM "boxen"
-                    WHERE box_id = ?
+                    WHERE id = ?
                 |] boxId
         )

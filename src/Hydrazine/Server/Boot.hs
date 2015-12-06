@@ -29,7 +29,7 @@ getBootInfo conn macaddr =
                          , images.kernel_path
                     FROM images
                     INNER JOIN boxen ON (boxen.boot_image = images.id)
-                    WHERE boxen.mac = ? AND images.active = TRUE
+                    WHERE boxen.mac = ? AND (boxen.boot_forever = TRUE OR boxen.boot_until > now())
                 |] (stripMac macaddr)
             when (isNothing mimage) $
                 throwE err404 { errBody = "that MAC address is not in the system" }
